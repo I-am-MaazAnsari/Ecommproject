@@ -1,141 +1,211 @@
-**Note:** This project is a fork of `opentelemetry-demo`. Thanks to the team and contributors for opensourcing this wonderful demo project. Definitely one of the best on internet.
+🔭 OpenTelemetry Astronomy Shop — DevOps Implementation
 
-<!-- markdownlint-disable-next-line -->
-# <img src="https://opentelemetry.io/img/logos/opentelemetry-logo-nav.png" alt="OTel logo" width="45"> OpenTelemetry Demo
+A production-grade observability setup built on top of the OpenTelemetry Demo by the CNCF community.
+This repo documents my hands-on implementation — including Kubernetes deployment, CI/CD pipeline, monitoring stack, and distributed tracing across 15+ polyglot microservices.
 
-[![Slack](https://img.shields.io/badge/slack-@cncf/otel/demo-brightgreen.svg?logo=slack)](https://cloud-native.slack.com/archives/C03B4CWV4DA)
-[![Version](https://img.shields.io/github/v/release/open-telemetry/opentelemetry-demo?color=blueviolet)](https://github.com/open-telemetry/opentelemetry-demo/releases)
-[![Commits](https://img.shields.io/github/commits-since/open-telemetry/opentelemetry-demo/latest?color=ff69b4&include_prereleases)](https://github.com/open-telemetry/opentelemetry-demo/graphs/commit-activity)
-[![Downloads](https://img.shields.io/docker/pulls/otel/demo)](https://hub.docker.com/r/otel/demo)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?color=red)](https://github.com/open-telemetry/opentelemetry-demo/blob/main/LICENSE)
-[![Integration Tests](https://github.com/open-telemetry/opentelemetry-demo/actions/workflows/run-integration-tests.yml/badge.svg)](https://github.com/open-telemetry/opentelemetry-demo/actions/workflows/run-integration-tests.yml)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opentelemetry-demo)](https://artifacthub.io/packages/helm/opentelemetry-helm/opentelemetry-demo)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9247/badge)](https://www.bestpractices.dev/en/projects/9247)
 
-## Welcome to the OpenTelemetry Astronomy Shop Demo
+📌 What This Project Is
+The OpenTelemetry Astronomy Shop is a microservice-based e-commerce application (selling astronomy equipment) designed to demonstrate real-world observability using OpenTelemetry.
+I deployed and configured this end to end on AWS EKS, wired up a Jenkins CI/CD pipeline, and set up the full Prometheus + Grafana + Jaeger observability stack — treating it like a real production system.
 
-This repository contains the OpenTelemetry Astronomy Shop, a microservice-based
-distributed system intended to illustrate the implementation of OpenTelemetry in
-a near real-world environment.
+🏗️ Architecture
+                        ┌─────────────────────────────────────────────────────┐
+                        │                  User / Browser                     │
+                        └─────────────────────┬───────────────────────────────┘
+                                              │
+                        ┌─────────────────────▼───────────────────────────────┐
+                        │            Frontend Proxy (Envoy)                   │
+                        │              Traffic routing layer                  │
+                        └──────────┬──────────────────────────┬───────────────┘
+                                   │                          │
+               ┌───────────────────▼──────┐    ┌─────────────▼───────────────┐
+               │   Frontend (TypeScript)  │    │  Load Generator (Locust)    │
+               └───────────────────┬──────┘    └─────────────────────────────┘
+                                   │
+        ┌──────────────────────────▼──────────────────────────────────────────┐
+        │                  Application Microservices                          │
+        │                                                                     │
+        │  ┌────────────┐ ┌──────────────┐ ┌──────────┐ ┌────────────────┐  │
+        │  │  Checkout  │ │Product Catalog│ │   Cart   │ │    Payment     │  │
+        │  │    (Go)    │ │    (Go)      │ │  (.NET)  │ │  (JavaScript)  │  │
+        │  └────────────┘ └──────────────┘ └──────────┘ └────────────────┘  │
+        │                                                                     │
+        │  ┌────────────┐ ┌──────────────┐ ┌──────────┐ ┌────────────────┐  │
+        │  │  Shipping  │ │   Currency   │ │  Email   │ │ Recommendation │  │
+        │  │   (Rust)   │ │    (C++)     │ │  (Ruby)  │ │   (Python)     │  │
+        │  └────────────┘ └──────────────┘ └──────────┘ └────────────────┘  │
+        │                                                                     │
+        │  ┌────────────┐ ┌──────────────┐ ┌──────────┐ ┌────────────────┐  │
+        │  │ Ad Service │ │Fraud Detection│ │Accounting│ │     Quote      │  │
+        │  │   (Java)   │ │   (Kotlin)   │ │  (.NET)  │ │    (PHP)       │  │
+        │  └────────────┘ └──────────────┘ └──────────┘ └────────────────┘  │
+        │                                                                     │
+        │            ┌────────────────────────────────┐                      │
+        │            │     Kafka Message Queue         │                      │
+        │            │   Async service communication   │                      │
+        │            └────────────────────────────────┘                      │
+        └──────────────────────────┬──────────────────────────────────────────┘
+                                   │ OTLP (gRPC 4317 / HTTP 4318)
+        ┌──────────────────────────▼──────────────────────────────────────────┐
+        │                     OTel Collector                                  │
+        │           Receives · Processes · Exports telemetry                  │
+        └────────┬──────────────┬──────────────────┬──────────────┬───────────┘
+                 │              │                  │              │
+        ┌────────▼───┐  ┌───────▼──────┐  ┌───────▼──────┐  ┌───▼──────────┐
+        │   Jaeger   │  │  Prometheus  │  │  OpenSearch  │  │   Grafana    │
+        │  (Traces)  │  │  (Metrics)   │  │   (Logs)     │  │ (Dashboards) │
+        └────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
 
-Our goals are threefold:
+🛠️ Tech Stack
+CategoryToolsOrchestrationKubernetes (AWS EKS)Service Mesh / ProxyEnvoyInstrumentationOpenTelemetry SDKs (10 languages)Telemetry PipelineOpenTelemetry Collector (OTLP)Distributed TracingJaegerMetricsPrometheusLog AggregationOpenSearchDashboardsGrafanaMessage QueueApache KafkaCacheValkey (Redis-compatible)Feature FlagsFlagdCI/CDJenkins + GitHubInfrastructureTerraform, AWS (EKS, VPC, IAM)Load TestingLocust
 
-- Provide a realistic example of a distributed system that can be used to
-  demonstrate OpenTelemetry instrumentation and observability.
-- Build a base for vendors, tooling authors, and others to extend and
-  demonstrate their OpenTelemetry integrations.
-- Create a living example for OpenTelemetry contributors to use for testing new
-  versions of the API, SDK, and other components or enhancements.
+⚙️ Setup & Deployment
+Prerequisites
+Make sure the following are installed on your local machine:
+bash# Verify each tool is installed
+kubectl version --client
+helm version
+aws --version
+terraform version
+docker version
+ToolVersionInstallkubectl>= 1.28sudo snap install kubectl --classicHelm>= 3.0curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bashAWS CLI>= 2.0pip install awscliTerraform>= 1.6sudo apt install terraformDocker>= 24.0sudo apt install docker.io
 
-We've already made [huge
-progress](https://github.com/open-telemetry/opentelemetry-demo/blob/main/CHANGELOG.md),
-and development is ongoing. We hope to represent the full feature set of
-OpenTelemetry across its languages in the future.
+Step 1 — Clone this repo
+bashgit clone https://github.com/I-am-MaazAnsari/otel-astronomy-shop.git
+cd otel-astronomy-shop
 
-If you'd like to help (**which we would love**), check out our [contributing
-guidance](./CONTRIBUTING.md).
+Step 2 — Provision EKS cluster with Terraform
+bashcd terraform/
+terraform init
+terraform validate
+terraform plan
+terraform apply
+After apply completes, update your kubeconfig:
+bashaws eks update-kubeconfig --name otel-demo-cluster --region us-east-1
+kubectl get nodes   # verify nodes are Ready
 
-If you'd like to extend this demo or maintain a fork of it, read our
-[fork guidance](https://opentelemetry.io/docs/demo/forking/).
+Step 3 — Deploy the application with Helm
+bash# Add the OpenTelemetry Helm repo
+helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+helm repo update
 
-## Quick start
+# Create namespace
+kubectl create namespace otel-demo
 
-You can be up and running with the demo in a few minutes. Check out the docs for
-your preferred deployment method:
+# Deploy the full application
+helm install otel-demo open-telemetry/opentelemetry-demo \
+  --namespace otel-demo \
+  --values helm/my-values.yaml
 
-- [Docker](https://opentelemetry.io/docs/demo/docker_deployment/)
-- [Kubernetes](https://opentelemetry.io/docs/demo/kubernetes_deployment/)
+Step 4 — Verify all pods are running
+bashkubectl get pods -n otel-demo
 
-## Documentation
+# Expected output — all pods should show Running status
+# NAME                                      READY   STATUS    RESTARTS
+# otel-demo-frontend-xxx                    1/1     Running   0
+# otel-demo-checkout-xxx                    1/1     Running   0
+# otel-demo-productcatalog-xxx              1/1     Running   0
+# otel-demo-otelcol-xxx                     1/1     Running   0
+# ...
 
-For detailed documentation, see [Demo Documentation][docs]. If you're curious
-about a specific feature, the [docs landing page][docs] can point you in the
-right direction.
+Step 5 — Access the services
+bash# Frontend (the shop UI)
+kubectl port-forward svc/otel-demo-frontend 8080:8080 -n otel-demo
 
-## Demos featuring the Astronomy Shop
+# Jaeger (distributed traces)
+kubectl port-forward svc/otel-demo-jaeger-query 16686:16686 -n otel-demo
 
-We welcome any vendor to fork the project to demonstrate their services and
-adding a link below. The community is committed to maintaining the project and
-keeping it up to date for you.
+# Grafana (dashboards)
+kubectl port-forward svc/otel-demo-grafana 3000:3000 -n otel-demo
 
-|                           |                |                                  |
-|---------------------------|----------------|----------------------------------|
-| [AlibabaCloud LogService] | [Elastic]      | [OpenSearch]                     |
-| [AppDynamics]             | [Google Cloud] | [Sentry]                         |
-| [Aspecto]                 | [Grafana Labs] | [ServiceNow Cloud Observability] |
-| [Axiom]                   | [Guance]       | [Splunk]                         |
-| [Axoflow]                 | [Honeycomb.io] | [Sumo Logic]                     |
-| [Azure Data Explorer]     | [Instana]      | [TelemetryHub]                   |
-| [Coralogix]               | [Kloudfuse]    | [Teletrace]                      |
-| [Dash0]                   | [Liatrio]      | [Tracetest]                      |
-| [Datadog]                 | [Logz.io]      | [Uptrace]                        |
-| [Dynatrace]               | [New Relic]    |                                  |
+# Prometheus (metrics)
+kubectl port-forward svc/otel-demo-prometheus 9090:9090 -n otel-demo
+ServiceURLCredentialsShop Frontendhttp://localhost:8080-Jaeger UIhttp://localhost:16686-Grafanahttp://localhost:3000admin / adminPrometheushttp://localhost:9090-
 
-## Contributing
+Step 6 — Trigger a test failure using Feature Flags
+One of the most powerful features of this demo is the ability to simulate production failures:
+bash# Access the feature flag UI
+kubectl port-forward svc/otel-demo-flagd 8013:8013 -n otel-demo
+Open http://localhost:8013 and enable productCatalogFailure.
+Now open Jaeger at http://localhost:16686 and watch the trace show the failure propagating from the Product Catalog service through to the Checkout service in real time.
 
-To get involved with the project see our [CONTRIBUTING](CONTRIBUTING.md)
-documentation. Our [SIG Calls](CONTRIBUTING.md#join-a-sig-call) are every other
-Monday at 8:30 AM PST and anyone is welcome.
+📊 Observability Highlights
+Distributed Tracing in Jaeger
+Every user request generates a trace that shows the full journey across services.
+Example — a single "Place Order" action creates spans across:
+Frontend → Checkout → Product Catalog → Cart → Currency → Payment → Shipping → Email
+Each span shows duration, status, and any errors. If one service is slow, you can pinpoint exactly which one without guessing.
+Metrics in Prometheus + Grafana
+Key metrics collected:
 
-## Project leadership
+http_server_duration_milliseconds — request latency per service
+rpc_server_requests_total — total gRPC requests between services
+process_cpu_seconds_total — CPU usage per pod
+kafka_consumer_lag — message queue depth
 
-[Maintainers](https://github.com/open-telemetry/community/blob/main/guides/contributor/membership.md#maintainer)
-([@open-telemetry/demo-maintainers](https://github.com/orgs/open-telemetry/teams/demo-maintainers)):
+Log Aggregation in OpenSearch
+All service logs are shipped to OpenSearch via the OTel Collector pipeline.
+Search across all 15+ services in one place.
 
-- [Juliano Costa](https://github.com/julianocosta89), Datadog
-- [Mikko Viitanen](https://github.com/mviitane), Dynatrace
-- [Pierre Tessier](https://github.com/puckpuck), Honeycomb
+🔄 CI/CD Pipeline (Jenkins)
+Developer pushes code
+        ↓
+Jenkins detects push via GitHub webhook
+        ↓
+Jenkins builds Docker image (tagged with git commit SHA)
+        ↓
+Image pushed to Docker Hub
+        ↓
+Kubernetes manifests updated with new image tag
+        ↓
+kubectl apply rolls out the update to EKS
+        ↓
+Prometheus detects new pod, begins scraping metrics
+Jenkins pipeline file is at Jenkinsfile in the root of this repo.
 
-[Approvers](https://github.com/open-telemetry/community/blob/main/guides/contributor/membership.md#approver)
-([@open-telemetry/demo-approvers](https://github.com/orgs/open-telemetry/teams/demo-approvers)):
+🔐 Security Considerations
 
-- [Cedric Ziel](https://github.com/cedricziel) Grafana Labs
-- [Penghan Wang](https://github.com/wph95), AppDynamics
-- [Reiley Yang](https://github.com/reyang), Microsoft
-- [Roger Coll](https://github.com/rogercoll), Elastic
-- [Ziqi Zhao](https://github.com/fatsheep9146), Alibaba
+All secrets managed via Kubernetes Secrets (base64 encoded, KMS encrypted at rest)
+IAM Roles for Service Accounts (IRSA) used for pod-level AWS access
+Network Policies restrict inter-pod communication to required paths only
+Security Groups on EKS node groups limit external traffic to ports 80/443
 
-Emeritus:
 
-- [Austin Parker](https://github.com/austinlparker)
-- [Carter Socha](https://github.com/cartersocha)
-- [Michael Maxwell](https://github.com/mic-max)
-- [Morgan McLean](https://github.com/mtwo)
+📁 Repository Structure
+otel-astronomy-shop/
+├── terraform/              # EKS cluster + VPC provisioning
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── modules/
+│       ├── eks/
+│       └── vpc/
+├── helm/
+│   └── my-values.yaml      # Custom Helm values for the demo
+├── k8s/
+│   ├── namespace.yaml
+│   ├── network-policy.yaml
+│   └── prometheus-rules.yaml
+├── jenkins/
+│   └── Jenkinsfile
+├── docs/
+│   └── architecture.png    # Architecture diagram
+└── README.md
 
-### Thanks to all the people who have contributed
+🧠 Key Learnings
 
-[![contributors](https://contributors-img.web.app/image?repo=open-telemetry/opentelemetry-demo)](https://github.com/open-telemetry/opentelemetry-demo/graphs/contributors)
+Why the OTel Collector exists — without it, every service would need a direct connection to every backend (Jaeger, Prometheus, etc). The collector centralises this — one endpoint for all services, fan-out to all backends.
+Traces vs Metrics vs Logs — they answer different questions. Traces tell you where something went wrong. Metrics tell you how bad it is. Logs tell you what exactly happened.
+Kafka's role — async communication between services like Checkout → Accounting means the checkout doesn't block waiting for accounting to finish. The trace still connects them end to end via trace context propagation.
+Feature flags for incident simulation — being able to trigger a controlled failure and trace it in Jaeger is the closest thing to a real incident drill you can do safely.
 
-[docs]: https://opentelemetry.io/docs/demo/
 
-<!-- Links for Demos featuring the Astronomy Shop section -->
+🙏 Credits
+This project is based on the OpenTelemetry Demo maintained by the CNCF OpenTelemetry community.
+My contributions include the Terraform EKS provisioning, Jenkins CI/CD pipeline, custom Helm values, Prometheus alert rules, and all documentation in this repo.
 
-[AlibabaCloud LogService]: https://github.com/aliyun-sls/opentelemetry-demo
-[AppDynamics]: https://www.appdynamics.com/blog/cloud/how-to-observe-opentelemetry-demo-app-in-appdynamics-cloud/
-[Aspecto]: https://github.com/aspecto-io/opentelemetry-demo
-[Axiom]: https://play.axiom.co/axiom-play-qf1k/dashboards/otel.traces.otel-demo-traces
-[Axoflow]: https://axoflow.com/opentelemetry-support-in-more-detail-in-axosyslog-and-syslog-ng/
-[Azure Data Explorer]: https://github.com/Azure/Azure-kusto-opentelemetry-demo
-[Coralogix]: https://coralogix.com/blog/configure-otel-demo-send-telemetry-data-coralogix
-[Dash0]: https://github.com/dash0hq/opentelemetry-demo
-[Datadog]: https://docs.datadoghq.com/opentelemetry/guide/otel_demo_to_datadog
-[Dynatrace]: https://www.dynatrace.com/news/blog/opentelemetry-demo-application-with-dynatrace/
-[Elastic]: https://github.com/elastic/opentelemetry-demo
-[Google Cloud]: https://github.com/GoogleCloudPlatform/opentelemetry-demo
-[Grafana Labs]: https://github.com/grafana/opentelemetry-demo
-[Guance]: https://github.com/GuanceCloud/opentelemetry-demo
-[Honeycomb.io]: https://github.com/honeycombio/opentelemetry-demo
-[Instana]: https://github.com/instana/opentelemetry-demo
-[Kloudfuse]: https://github.com/kloudfuse/opentelemetry-demo
-[Liatrio]: https://github.com/liatrio/opentelemetry-demo
-[Logz.io]: https://logz.io/learn/how-to-run-opentelemetry-demo-with-logz-io/
-[New Relic]: https://github.com/newrelic/opentelemetry-demo
-[OpenSearch]: https://github.com/opensearch-project/opentelemetry-demo
-[Sentry]: https://github.com/getsentry/opentelemetry-demo
-[ServiceNow Cloud Observability]: https://docs.lightstep.com/otel/quick-start-operator#send-data-from-the-opentelemetry-demo
-[Splunk]: https://github.com/signalfx/opentelemetry-demo
-[Sumo Logic]: https://www.sumologic.com/blog/common-opentelemetry-demo-application/
-[TelemetryHub]: https://github.com/TelemetryHub/opentelemetry-demo/tree/telemetryhub-backend
-[Teletrace]: https://github.com/teletrace/opentelemetry-demo
-[Tracetest]: https://github.com/kubeshop/opentelemetry-demo
-[Uptrace]: https://github.com/uptrace/uptrace/tree/master/example/opentelemetry-demo
+📬 Contact
+Maaz Ansari — DevOps Engineer
+📧 maazansari.86@gmail.com
+🔗 LinkedIn
+💻 GitHub
